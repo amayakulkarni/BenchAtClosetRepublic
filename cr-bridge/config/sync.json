@@ -1,0 +1,35 @@
+{
+  "_readme": "Reddit sync rules. Category ids (cid) are the numbers in forum URLs (/category/5/...). See docs/reddit-sync.md.",
+  "pollSeconds": 120,
+  "ingest": {
+    "enabled": true,
+    "defaultCid": 0,
+    "flairToCid": {},
+    "skipFlairs": [
+      "Meta",
+      "Mod Announcement"
+    ],
+    "minAgeMinutes": 10,
+    "maxAgeHours": 48,
+    "allowNsfw": false,
+    "excerptChars": 600,
+    "author": "hidden",
+    "mirrorComments": false,
+    "commentWindowHours": 72,
+    "tags": [
+      "from-reddit"
+    ]
+  },
+  "publish": {
+    "enabled": true,
+    "consentTag": "share-to-reddit",
+    "cids": [],
+    "minTier": null,
+    "titlePrefix": "",
+    "flairId": null
+  },
+  "reconcile": {
+    "everyMinutes": 15,
+    "windowDays": 14
+  }
+}

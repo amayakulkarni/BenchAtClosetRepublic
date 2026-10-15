@@ -1,0 +1,14 @@
+{
+	"name": "nodebb-plugin-closet-republic",
+	"version": "0.1.0",
+	"description": "Closet Republic: Discord login with pseudonymous usernames, and forum events for the bridge",
+	"main": "library.js",
+	"license": "MIT",
+	"private": true,
+	"nbbpm": {
+		"compatibility": "^4.0.0"
+	},
+	"dependencies": {
+		"passport-oauth2": "1.8.0"
+	}
+}

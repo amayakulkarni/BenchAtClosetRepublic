@@ -1,0 +1,107 @@
+{
+  "_readme": "Paid tiers, lowest rank first (rank follows the Buy Me a Coffee price). bmcLevelIds: Buy Me a Coffee membership level ids (from a webhook event's membership_level_id; preferred, they survive renames). bmcLevels: level names as on the Buy Me a Coffee page (case-insensitive fallback). discordRoleIds: Discord role ids; either id counts, so the visible class role and the hidden access role (kept when a member uses /discreet) both work (Server Settings > Roles > right-click > Copy Role ID, with Developer Mode on). A member gets the highest tier any source gives them; members with no paid tier get no tier group and no badge.",
+  "defaultTier": null,
+  "discordMemberTier": null,
+  "bmcUnknownLevelTier": "alien",
+  "graceDays": 7,
+  "reconcileHours": 6,
+  "tiers": [
+    {
+      "key": "alien",
+      "name": "Alien",
+      "rank": 0,
+      "price": "$1/month",
+      "bmcLevelIds": [],
+      "bmcLevels": [
+        "alien"
+      ],
+      "discordRoleIds": [
+        "1560210912219111425",
+        "1560210921597440001"
+      ],
+      "userTitle": "Alien",
+      "labelColor": "#4b5563",
+      "textColor": "#ffffff",
+      "icon": "fa-user-astronaut",
+      "description": "Asylum seekers. Pay no taxes, work hard, still part of the Closet Republic."
+    },
+    {
+      "key": "citizen",
+      "name": "Citizen",
+      "rank": 1,
+      "price": "$3/month",
+      "bmcLevelIds": [],
+      "bmcLevels": [
+        "citizen"
+      ],
+      "discordRoleIds": [
+        "1560210910537195541",
+        "1560210920037425254"
+      ],
+      "userTitle": "Citizen",
+      "labelColor": "#2563eb",
+      "textColor": "#ffffff",
+      "icon": "fa-id-card",
+      "description": "Registered citizens helping the Republic grow its community."
+    },
+    {
+      "key": "top-1",
+      "name": "Top 1%",
+      "rank": 2,
+      "price": "$5/month",
+      "bmcLevelIds": [],
+      "bmcLevels": [
+        "In dictator's bed",
+        "Top 1%"
+      ],
+      "discordRoleIds": [
+        "1560210908834172978",
+        "1560210918359433216"
+      ],
+      "userTitle": "Top 1%",
+      "labelColor": "#d97706",
+      "textColor": "#111827",
+      "icon": "fa-crown",
+      "description": "In the dictator's bed: the affluent inner circle (satire)."
+    },
+    {
+      "key": "upper-middle-class",
+      "name": "Upper Middle Class",
+      "rank": 3,
+      "price": "$6/month",
+      "bmcLevelIds": [],
+      "bmcLevels": [
+        "Upper middle class"
+      ],
+      "discordRoleIds": [
+        "1560210907135479838",
+        "1560210916321009674"
+      ],
+      "userTitle": "Upper Middle Class",
+      "labelColor": "#7c3aed",
+      "textColor": "#ffffff",
+      "icon": "fa-gem",
+      "description": "Works a little less hard, still won't get the dictator's attention."
+    },
+    {
+      "key": "middle-class",
+      "name": "Middle Class",
+      "rank": 4,
+      "price": "$8/month",
+      "bmcLevelIds": [],
+      "bmcLevels": [
+        "Middle class"
+      ],
+      "discordRoleIds": [
+        "1560210905394839582",
+        "1560210913825390613"
+      ],
+      "userTitle": "Middle Class",
+      "labelColor": "#059669",
+      "textColor": "#ffffff",
+      "icon": "fa-mug-hot",
+      "description": "Works hardest, taxed highest, gains nothing but disappointment."
+    }
+  ],
+  "discordGuildId": "1496380917223133264"
+}
