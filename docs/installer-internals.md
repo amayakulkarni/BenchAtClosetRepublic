@@ -20,7 +20,7 @@
 
 ```
 main
-├─ preflight                 root? Ubuntu 22.04/24.04? ports 40006/40007 free? DNS points here?
+├─ preflight                 root? Ubuntu 22.04/24.04 or Debian 12/13? ports 40006/40007 free? DNS points here?
 ├─ install_packages          apt: nginx, certbot, jq, sqlite3, rsync, ufw; Node 22 (NodeSource); pm2
 ├─ prepare_user_and_secrets  user "nodebb", /opt/closet-republic, /etc/closet-republic/{forum,bridge}.env
 ├─ install_database          MongoDB 8.0 with auth (users first, then auth on) or Redis with a password

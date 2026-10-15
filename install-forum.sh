@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Closet Republic forum: production setup for a fresh or existing Ubuntu 22.04/24.04 server.
+# Closet Republic forum: production setup for a fresh or existing Ubuntu 22.04/24.04 or Debian 12/13 server.
 #
 # Installs and wires up:
 #   NodeBB (pinned version) on 127.0.0.1:40006   + nodebb-plugin-closet-republic
@@ -36,6 +36,7 @@ WITH_TLS=1
 SCHEME=https
 WITH_FIREWALL=0
 DRY_RUN=0
+DISTRO=""
 
 BASE=/opt/closet-republic
 NODEBB_DIR=$BASE/nodebb
@@ -94,12 +95,18 @@ preflight() {
 
   . /etc/os-release 2>/dev/null || true
   CODENAME="${VERSION_CODENAME:-unknown}"
-  case "$CODENAME" in
-    jammy|noble) info "Ubuntu $CODENAME" ;;
-    *) [[ $DRY_RUN -eq 1 ]] && info "OS: $CODENAME (dry run, continuing)" || die "tested on Ubuntu 22.04 (jammy) and 24.04 (noble); found '$CODENAME'" ;;
+  DISTRO="${ID:-unknown}"
+  case "$DISTRO:$CODENAME" in
+    ubuntu:jammy|ubuntu:noble|debian:bookworm|debian:trixie) info "${PRETTY_NAME:-$DISTRO $CODENAME}" ;;
+    *) [[ $DRY_RUN -eq 1 ]] && info "OS: $DISTRO $CODENAME (dry run, continuing)" \
+         || die "supported: Ubuntu 22.04 (jammy), 24.04 (noble), Debian 12 (bookworm), 13 (trixie); found '$DISTRO $CODENAME'" ;;
   esac
+  # MongoDB publishes no packages for Debian 13 yet.
+  if [[ "$DB_KIND" == mongo && "$CODENAME" == trixie ]]; then
+    die "MongoDB has no packages for Debian 13 (trixie); re-run with --db redis"
+  fi
 
-  command -v ss >/dev/null || die "the 'ss' command is missing (apt-get install iproute2)"
+  command -v ss >/dev/null || run apt-get install -y iproute2
   for port in $NODEBB_PORT $BRIDGE_PORT; do
     if ss -ltnp 2>/dev/null | grep -qE "[:.]$port\b" && ! ss -ltnp 2>/dev/null | grep -E "[:.]$port\b" | grep -qE 'node|PM2'; then
       die "port $port is used by something other than this forum"
@@ -123,7 +130,7 @@ install_packages() {
   say "Installing system packages"
   run apt-get update -y
   run env DEBIAN_FRONTEND=noninteractive apt-get install -y curl git build-essential ca-certificates gnupg \
-    nginx certbot python3-certbot-nginx jq openssl sqlite3 rsync ufw
+    nginx certbot python3-certbot-nginx jq openssl sqlite3 rsync ufw sudo iproute2
 
   local major=0
   command -v node >/dev/null && major="$(node -p 'process.versions.node.split(".")[0]')"
@@ -179,7 +186,9 @@ install_database() {
       if [[ $DRY_RUN -eq 0 ]]; then
         grep -qw avx /proc/cpuinfo || die "this CPU has no AVX, which MongoDB 5+ needs; re-run with --db redis"
         curl -fsSL https://www.mongodb.org/static/pgp/server-8.0.asc | gpg --dearmor --yes -o /usr/share/keyrings/mongodb-server-8.0.gpg
-        echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] https://repo.mongodb.org/apt/ubuntu ${CODENAME}/mongodb-org/8.0 multiverse" \
+        local repo="https://repo.mongodb.org/apt/ubuntu ${CODENAME}/mongodb-org/8.0 multiverse"
+        [[ "$DISTRO" == debian ]] && repo="https://repo.mongodb.org/apt/debian ${CODENAME}/mongodb-org/8.0 main"
+        echo "deb [ arch=amd64,arm64 signed-by=/usr/share/keyrings/mongodb-server-8.0.gpg ] $repo" \
           > /etc/apt/sources.list.d/mongodb-org-8.0.list
       fi
       run apt-get update -y
