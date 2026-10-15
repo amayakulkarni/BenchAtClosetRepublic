@@ -11,6 +11,7 @@
 | Pinned versions | Production gets exactly what was tested | `--nodebb-version v4.16.3`, `pm2@6`, `npm ci` from the bridge's lockfile |
 | Localhost only | Only nginx faces the internet | NodeBB `bind_address 127.0.0.1`, bridge `CR_BRIDGE_HOST=127.0.0.1`, MongoDB/Redis bound to 127.0.0.1 with passwords |
 | Own user | A forum bug can't touch the main site | everything runs as the `nodebb` system user with its own pm2 |
+| Own Node.js | Installing or upgrading the forum never replaces the Node.js the main site (and its native modules such as better-sqlite3) was built against | official Node.js 22 in `/opt/closet-republic/node`, used through `PATH` for the `nodebb` user and as pm2's `interpreter`; the system `node` is only reported, never changed |
 | Fixed ports | 40001 to 40005 belong to the main site | NodeBB 40006, bridge 40007; preflight refuses if something else holds them |
 | Look before acting | Every command is visible first | `--dry-run` prints each command instead of running it |
 | Nothing surprising | Never lock anyone out or overwrite manual edits | firewall only with `--firewall`; nginx site and bridge `config/` are written only if missing |
@@ -21,14 +22,17 @@
 ```
 main
 ├─ preflight                 root? Ubuntu 22.04/24.04 or Debian 12/13? ports 40006/40007 free? DNS points here?
-├─ install_packages          apt: nginx, certbot, jq, sqlite3, rsync, ufw; Node 22 (NodeSource); pm2
+├─ install_packages          apt: nginx, certbot, jq, sqlite3, rsync, ufw (the server's Node.js is left alone)
 ├─ prepare_user_and_secrets  user "nodebb", /opt/closet-republic, /etc/closet-republic/{forum,bridge}.env
+├─ install_node              official Node.js 22 tarball (SHA-256 pinned) → /opt/closet-republic/node; pm2 inside it;
+│                            /usr/local/bin/forum-pm2 wrapper
 ├─ install_database          MongoDB 8.0 with auth (users first, then auth on) or Redis with a password
 ├─ install_nodebb            git clone tag → npm install → ./nodebb setup (from env vars) →
 │                            config.json: port 40006, 127.0.0.1, trust_proxy → plugin → activate →
 │                            reddit-bridge admin account → Write API token → ./nodebb build
 ├─ install_bridge            rsync cr-bridge (keeps config/ and data/) → npm ci
-├─ configure_pm2             ecosystem.forum.config.cjs → pm2 startOrReload → pm2 save → boot service
+├─ configure_pm2             ecosystem.forum.config.cjs (interpreter = the forum's Node.js) → pm2 startOrReload →
+│                            pm2 save → boot service
 ├─ configure_nginx           site for --domain, websockets, /bridge/webhooks/ only → certbot
 ├─ configure_firewall        only with --firewall
 ├─ configure_backups         /opt/closet-republic/backup-forum.sh + cron at 03:15

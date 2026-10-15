@@ -7,8 +7,8 @@ This checks every feature with a **fake Reddit** and a **fake Discord** that com
 Run these in Ubuntu:
 
 ```bash
-sudo -u nodebb -H pm2 ls                       # are both parts running?
-sudo -u nodebb -H pm2 logs cr-bridge --lines 50
+sudo forum-pm2 ls                       # are both parts running?
+sudo forum-pm2 logs cr-bridge --lines 50
 curl -s 127.0.0.1:40007/healthz
 # run one of the bridge's jobs now instead of waiting for its timer:
 TOKEN=$(sudo grep ^CR_ADMIN_TOKEN= /etc/closet-republic/bridge.env | cut -d= -f2)
@@ -51,7 +51,7 @@ REDDIT_USERNAME=closetrepublic_bot
 REDDIT_PASSWORD=fake
 ```
 ```bash
-sudo -u nodebb -H pm2 restart cr-bridge
+sudo forum-pm2 restart cr-bridge
 ```
 
 Then go through the scenarios. `M=http://127.0.0.1:40017`.
@@ -114,7 +114,7 @@ CR_DISCORD_BASE=http://127.0.0.1:40018
 Reload NodeBB so it picks up the new environment:
 
 ```bash
-sudo -u nodebb -H pm2 startOrReload /opt/closet-republic/ecosystem.forum.config.cjs --update-env
+sudo forum-pm2 startOrReload /opt/closet-republic/ecosystem.forum.config.cjs --update-env
 ```
 
 In a private browser window, open `http://localhost/login` and click **Log in with Discord**. The fake approves at once.
@@ -151,7 +151,7 @@ Do this once on the PC (Part A of INSTALL.md) to prove the restore works before 
 
 ```bash
 sudo ./install-forum.sh --domain localhost --email admin@example.com --no-tls   # fresh install
-sudo -u nodebb -H pm2 stop all
+sudo forum-pm2 stop all
 B=/path/to/backups/2026-10-15
 P="$(sudo grep ^DB_PASSWORD= /etc/closet-republic/forum.env | cut -d= -f2)"
 mongorestore --drop --gzip --archive=$B/nodebb.mongo.gz -u nodebb -p "$P" --authenticationDatabase nodebb
@@ -159,7 +159,7 @@ sudo tar -xzf $B/uploads.tar.gz -C /opt/closet-republic/nodebb/public
 sudo cp $B/bridge.db /opt/closet-republic/cr-bridge/data/bridge.db
 sudo cp -r $B/bridge-config/. /opt/closet-republic/cr-bridge/config/
 sudo chown -R nodebb:nodebb /opt/closet-republic
-sudo -u nodebb -H pm2 start all
+sudo forum-pm2 start all
 ```
 
 (Redis: stop Redis, copy `nodebb.redis.rdb` to `/var/lib/redis/dump.rdb`, start Redis.) Restoring to a new server is the same, then pointing DNS at it.

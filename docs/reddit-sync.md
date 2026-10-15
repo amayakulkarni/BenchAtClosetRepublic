@@ -9,7 +9,7 @@ All settings live in two places on the server:
 | `/etc/closet-republic/bridge.env` | Reddit mode, credentials, subreddit, rate cap |
 | `/opt/closet-republic/cr-bridge/config/sync.json` | what gets copied where, and how it looks |
 
-After changing either: `sudo -u nodebb -H pm2 restart cr-bridge`.
+After changing either: `sudo forum-pm2 restart cr-bridge`.
 
 ---
 
@@ -143,9 +143,9 @@ Only then switch `REDDIT_SUBREDDIT` to `closetrepublic`.
 Before switching, clear the test mappings so the real subreddit starts clean:
 
 ```bash
-sudo -u nodebb -H pm2 stop cr-bridge
+sudo forum-pm2 stop cr-bridge
 sudo sqlite3 /opt/closet-republic/cr-bridge/data/bridge.db "DELETE FROM sync_map;"
-sudo -u nodebb -H pm2 start cr-bridge
+sudo forum-pm2 start cr-bridge
 ```
 
 ## 4. Rate-limit budget

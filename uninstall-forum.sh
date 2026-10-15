@@ -6,10 +6,11 @@
 #   the nginx site and its Let's Encrypt certificate
 #   the nightly backup job
 #   the forum's database and database user (MongoDB "nodebb" database, or Redis database 0)
-#   /opt/closet-republic, /etc/closet-republic and the "nodebb" system user
+#   /opt/closet-republic (including the forum's own Node.js), /etc/closet-republic,
+#   the "forum-pm2" command and the "nodebb" system user
 # Keeps:
 #   the backups: moved to /var/backups/closet-republic-forum (unless --delete-backups)
-#   Node.js, nginx, certbot, MongoDB/Redis themselves (unless --remove-packages)
+#   the server's own Node.js (never touched), nginx, certbot, MongoDB/Redis (unless --remove-packages)
 #   firewall rules, and everything that belongs to the main site (ports 40001-40005)
 #
 # Usage (as root):
@@ -31,6 +32,9 @@ ETC=/etc/closet-republic
 FORUM_ENV=$ETC/forum.env
 RUN_USER=nodebb
 SITE=closet-republic-forum
+NODE_DIR=$BASE/node
+FORUM_PATH="$NODE_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+PM2_CMD=/usr/local/bin/forum-pm2
 KEEP_BACKUPS_IN=/var/backups/closet-republic-forum
 
 KEEP_DATA=0
@@ -60,6 +64,8 @@ run()  { if [[ $DRY_RUN -eq 1 ]]; then printf '    + %s\n' "$*"; else "$@"; fi; 
 try()  { run "$@" || info "(skipped: '$*' failed)"; }
 env_get() { [[ -r "$1" ]] && grep -E "^$2=" "$1" | tail -1 | cut -d= -f2- || true; }
 has_user() { id "$RUN_USER" >/dev/null 2>&1; }
+# The forum's pm2, as the nodebb user (older installs used the server's pm2, so PATH has both).
+pm2_user() { sudo -u "$RUN_USER" -H env PATH="$FORUM_PATH" pm2 "$@"; }
 
 # ---------------------------------------------------------------- 1. checks
 preflight() {
@@ -95,11 +101,11 @@ preflight() {
 # ---------------------------------------------------------------- 2. processes
 stop_processes() {
   say "Stopping the forum and the bridge"
-  if has_user && sudo -u "$RUN_USER" -H bash -c 'command -v pm2' >/dev/null 2>&1; then
-    try sudo -u "$RUN_USER" -H pm2 delete nodebb
-    try sudo -u "$RUN_USER" -H pm2 delete cr-bridge
-    try sudo -u "$RUN_USER" -H pm2 save --force
-    [[ $KEEP_DATA -eq 1 ]] || try sudo -u "$RUN_USER" -H pm2 kill
+  if has_user && sudo -u "$RUN_USER" -H env PATH="$FORUM_PATH" bash -c 'command -v pm2' >/dev/null 2>&1; then
+    try pm2_user delete nodebb
+    try pm2_user delete cr-bridge
+    try pm2_user save --force
+    [[ $KEEP_DATA -eq 1 ]] || try pm2_user kill
   else
     info "pm2 for $RUN_USER not found (already stopped)"
   fi
@@ -201,6 +207,7 @@ remove_files() {
 
   say "Deleting the forum files, secrets and service user"
   run rm -rf "$BASE" "$ETC"
+  run rm -f "$PM2_CMD"
   run rm -f /var/log/closet-republic-forum-backup.log
   if has_user; then
     try userdel "$RUN_USER"
@@ -217,7 +224,8 @@ summary() {
   else
     info "The forum, bridge, database, secrets and service user are removed."
     [[ $DELETE_BACKUPS -eq 1 ]] || info "Backups kept in $KEEP_BACKUPS_IN"
-    [[ $REMOVE_PACKAGES -eq 1 ]] || info "Node.js, nginx, certbot and ${DB_KIND:-the database server} are still installed."
+    [[ $REMOVE_PACKAGES -eq 1 ]] || info "nginx, certbot and ${DB_KIND:-the database server} are still installed."
+    info "The server's own Node.js was not touched (the forum's private copy in $NODE_DIR is removed)."
   fi
   info "On the main site, remove COMMUNITY_FORUM_URL and FORUM_BRIDGE_URL / FORUM_BRIDGE_SECRET from its"
   info "environment and restart it, so it stops linking to the forum and forwarding Buy Me a Coffee events."

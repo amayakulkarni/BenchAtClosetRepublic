@@ -4,8 +4,10 @@
 # Installs and wires up:
 #   NodeBB (pinned version) on 127.0.0.1:40006   + nodebb-plugin-closet-republic
 #   cr-bridge (Reddit sync, role tiers)  on 127.0.0.1:40007
-#   MongoDB 8.0 (default) or Redis, Node.js 22, pm2 (under a dedicated "nodebb" user),
+#   MongoDB 8.0 (default) or Redis, pm2 (under a dedicated "nodebb" user),
 #   nginx reverse proxy with Let's Encrypt TLS, nightly backups.
+#   Node.js 22 for the forum only, in /opt/closet-republic/node. The server's own Node.js (used
+#   by the main site) is never installed, upgraded or removed.
 # Ports 40001-40005 belong to the main site and are never touched.
 #
 # Usage (as root, from the forum folder, which holds this script, cr-bridge/ and nodebb/plugin/):
@@ -46,6 +48,13 @@ ETC=/etc/closet-republic
 FORUM_ENV=$ETC/forum.env
 BRIDGE_ENV=$ETC/bridge.env
 RUN_USER=nodebb
+# The forum's private Node.js (official build, checked against these SHA-256 sums).
+NODE_VERSION="v22.22.0"
+NODE_SHA256_X64="9aa8e9d2298ab68c600bd6fb86a6c13bce11a4eca1ba9b39d79fa021755d7c37"
+NODE_SHA256_ARM64="1bf1eb9ee63ffc4e5d324c0b9b62cf4a289f44332dfef9607cea1a0d9596ba6f"
+NODE_DIR=$BASE/node
+FORUM_PATH="$NODE_DIR/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+PM2_CMD=/usr/local/bin/forum-pm2
 SRC_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 while [[ $# -gt 0 ]]; do
@@ -67,8 +76,10 @@ say()  { printf '\n\033[1;35m==> %s\033[0m\n' "$*"; }
 info() { printf '    %s\n' "$*"; }
 die()  { printf '\033[1;31mError:\033[0m %s\n' "$*" >&2; exit 1; }
 run()  { if [[ $DRY_RUN -eq 1 ]]; then printf '    + %s\n' "$*"; else "$@"; fi; }
-# Run a shell snippet as the service user, from a given folder.
-as_user() { local dir="$1"; shift; run sudo -u "$RUN_USER" -H bash -c "cd '$dir' && $*"; }
+# Run a shell snippet as the service user, from a given folder, with the forum's own Node.js first.
+as_user() { local dir="$1"; shift; run sudo -u "$RUN_USER" -H env PATH="$FORUM_PATH" bash -c "cd '$dir' && $*"; }
+# Same, but also runs in a dry run (used to read values).
+user_sh() { sudo -u "$RUN_USER" -H env PATH="$FORUM_PATH" bash -c "$1"; }
 rand() { openssl rand -hex "${1:-24}"; }
 env_get() { [[ -f "$1" ]] && grep -E "^$2=" "$1" | tail -1 | cut -d= -f2- || true; }
 env_set() { # file key value (adds or replaces)
@@ -129,19 +140,57 @@ preflight() {
 install_packages() {
   say "Installing system packages"
   run apt-get update -y
-  run env DEBIAN_FRONTEND=noninteractive apt-get install -y curl git build-essential ca-certificates gnupg \
+  run env DEBIAN_FRONTEND=noninteractive apt-get install -y curl git build-essential ca-certificates gnupg xz-utils \
     nginx certbot python3-certbot-nginx jq openssl sqlite3 rsync ufw sudo iproute2
 
-  local major=0
-  command -v node >/dev/null && major="$(node -p 'process.versions.node.split(".")[0]')"
-  if (( major < 22 )); then
-    info "Installing Node.js 22 (found ${major})"
-    if [[ $DRY_RUN -eq 0 ]]; then curl -fsSL https://deb.nodesource.com/setup_22.x | bash -; fi
-    run apt-get install -y nodejs
-  else
-    info "Node.js $(node -v) already installed"
+  if command -v node >/dev/null; then
+    info "The server's Node.js $(node -v) is left exactly as it is (the forum uses its own copy)"
   fi
-  command -v pm2 >/dev/null || run npm install -g pm2@6
+}
+
+# ---------------------------------------------------------------- 2b. the forum's own Node.js
+# A private Node.js in $NODE_DIR, so installing or upgrading the forum never replaces the
+# server's Node.js, which the main site and its native modules (such as better-sqlite3) are
+# built against.
+install_node() {
+  say "Installing Node.js $NODE_VERSION for the forum only ($NODE_DIR)"
+  if [[ -x "$NODE_DIR/bin/node" && "$("$NODE_DIR/bin/node" -v 2>/dev/null)" == "$NODE_VERSION" ]]; then
+    info "already installed"
+  else
+    local arch sum file tmp
+    case "$(uname -m)" in
+      x86_64) arch=x64; sum=$NODE_SHA256_X64 ;;
+      aarch64|arm64) arch=arm64; sum=$NODE_SHA256_ARM64 ;;
+      *) die "unsupported processor '$(uname -m)' (x86_64 or arm64 needed)" ;;
+    esac
+    file="node-$NODE_VERSION-linux-$arch.tar.xz"
+    if [[ $DRY_RUN -eq 1 ]]; then
+      info "+ download https://nodejs.org/dist/$NODE_VERSION/$file, check its SHA-256, unpack into $NODE_DIR"
+    else
+      tmp="$(mktemp -d)"
+      curl -fsSL -o "$tmp/$file" "https://nodejs.org/dist/$NODE_VERSION/$file"
+      echo "$sum  $tmp/$file" | sha256sum -c --quiet - || die "the Node.js download failed its checksum; nothing was changed"
+      rm -rf "$NODE_DIR.new" && mkdir -p "$NODE_DIR.new"
+      tar -xJf "$tmp/$file" -C "$NODE_DIR.new" --strip-components=1
+      rm -rf "$NODE_DIR" && mv "$NODE_DIR.new" "$NODE_DIR"
+      chown -R root:root "$NODE_DIR" && chmod -R go-w "$NODE_DIR"
+      rm -rf "$tmp"
+    fi
+  fi
+  if [[ $DRY_RUN -eq 1 || ! -x "$NODE_DIR/bin/pm2" ]]; then
+    run env PATH="$FORUM_PATH" "$NODE_DIR/bin/npm" install -g --no-audit --no-fund pm2@6
+  fi
+  # "forum-pm2" runs the forum's own pm2 as the nodebb user, for example: sudo forum-pm2 ls
+  if [[ $DRY_RUN -eq 0 ]]; then
+    cat > "$PM2_CMD" <<EOF
+#!/usr/bin/env bash
+# Closet Republic forum: the forum's own pm2 (generated by install-forum.sh). Example: sudo forum-pm2 ls
+exec sudo -u $RUN_USER -H env PATH="$FORUM_PATH" "$NODE_DIR/bin/pm2" "\$@"
+EOF
+    chmod 755 "$PM2_CMD"
+  else
+    info "+ write $PM2_CMD"
+  fi
 }
 
 # ---------------------------------------------------------------- 3. user, folders, secrets
@@ -251,12 +300,12 @@ install_nodebb() {
   local uid
   uid="$(env_get "$BRIDGE_ENV" CR_BRIDGE_UID)"
   if [[ -z "$uid" && $DRY_RUN -eq 0 ]]; then
-    uid="$(sudo -u "$RUN_USER" -H bash -c "cd '$NODEBB_DIR' && ./nodebb user info --username reddit-bridge 2>/dev/null" | grep -oP "^\s*uid: \K[1-9][0-9]*" | head -1 || true)"
+    uid="$(user_sh "cd '$NODEBB_DIR' && ./nodebb user info --username reddit-bridge 2>/dev/null" | grep -oP "^\s*uid: \K[1-9][0-9]*" | head -1 || true)"
     if [[ -z "$uid" ]]; then
-      uid="$(sudo -u "$RUN_USER" -H bash -c "cd '$NODEBB_DIR' && ./nodebb user create reddit-bridge 2>&1" | grep -oP 'with uid: \K\d+' | head -1 || true)"
+      uid="$(user_sh "cd '$NODEBB_DIR' && ./nodebb user create reddit-bridge 2>&1" | grep -oP 'with uid: \K\d+' | head -1 || true)"
     fi
     [[ -n "$uid" ]] || die "could not create the reddit-bridge account"
-    sudo -u "$RUN_USER" -H bash -c "cd '$NODEBB_DIR' && ./nodebb user make admin $uid" >/dev/null
+    user_sh "cd '$NODEBB_DIR' && ./nodebb user make admin $uid" >/dev/null
   fi
   env_set "$BRIDGE_ENV" CR_BRIDGE_UID "${uid:-<uid>}"
   env_set "$FORUM_ENV" CR_BRIDGE_UID "${uid:-<uid>}"
@@ -264,7 +313,7 @@ install_nodebb() {
   if [[ -z "$(env_get "$BRIDGE_ENV" NODEBB_TOKEN)" && $DRY_RUN -eq 0 ]]; then
     local token
     install -o "$RUN_USER" -g "$RUN_USER" -m 644 "$SRC_DIR/nodebb/make-api-token.cjs" "$BASE/nodebb-master-token.cjs"
-    token="$(sudo -u "$RUN_USER" -H bash -c "cd '$NODEBB_DIR' && node '$BASE/nodebb-master-token.cjs' cr-bridge 2>/dev/null" | tail -1)"
+    token="$(user_sh "cd '$NODEBB_DIR' && node '$BASE/nodebb-master-token.cjs' cr-bridge 2>/dev/null" | tail -1)"
     [[ "$token" =~ ^[0-9a-f-]{36}$ ]] || die "could not create the Write API token; create one in ACP > Settings > API Access and put it in $BRIDGE_ENV as NODEBB_TOKEN"
     env_set "$BRIDGE_ENV" NODEBB_TOKEN "$token"
   fi
@@ -290,7 +339,7 @@ configure_pm2() {
   if [[ $DRY_RUN -eq 0 ]]; then
     cat > "$eco" <<EOF
 // Generated by install-forum.sh. Start/stop as the nodebb user:
-//   sudo -u $RUN_USER -H pm2 startOrReload $BASE/ecosystem.forum.config.cjs --update-env
+//   sudo forum-pm2 startOrReload $BASE/ecosystem.forum.config.cjs --update-env
 // (re-reads $FORUM_ENV; the bridge reads $BRIDGE_ENV on every start)
 const fs = require('fs');
 const readEnv = (file) => Object.fromEntries(
@@ -305,6 +354,7 @@ module.exports = {
       name: 'nodebb',
       cwd: '$NODEBB_DIR',
       script: 'loader.js',
+      interpreter: '$NODE_DIR/bin/node', // the forum's own Node.js, never the server's
       args: '--no-daemon --no-silent',
       env: {
         NODE_ENV: 'production',
@@ -314,6 +364,7 @@ module.exports = {
         CR_BRIDGE_SECRET: forum.CR_BRIDGE_SECRET,
         CR_BRIDGE_UID: forum.CR_BRIDGE_UID,
         CR_DISCORD_BASE: forum.CR_DISCORD_BASE || '', // only set on test machines (mock Discord)
+        CR_MAIN_SITE_URL: forum.CR_MAIN_SITE_URL || '', // header/footer links; empty = https://closetrepublic.com
       },
       max_memory_restart: '1G',
       kill_timeout: 10000,
@@ -322,6 +373,7 @@ module.exports = {
       name: 'cr-bridge',
       cwd: '$BRIDGE_DIR',
       script: 'src/index.js',
+      interpreter: '$NODE_DIR/bin/node',
       node_args: '--env-file=$BRIDGE_ENV',
       exec_mode: 'fork',
       instances: 1, // one writer for the SQLite file and the Reddit rate budget
@@ -335,8 +387,13 @@ EOF
   else
     info "+ write $eco"
   fi
-  as_user "$BASE" "pm2 startOrReload '$eco' --update-env && pm2 save"
-  run env PATH="$PATH" pm2 startup systemd -u "$RUN_USER" --hp "$BASE"
+  # Installs made before the forum had its own Node.js ran pm2 on the server's Node.js; stop that
+  # pm2 once so everything restarts on the forum's own copy.
+  if [[ ! -f "$BASE/.pm2/own-node" ]]; then
+    as_user "$BASE" "pm2 kill >/dev/null 2>&1 || true"
+  fi
+  as_user "$BASE" "pm2 startOrReload '$eco' --update-env && pm2 save && touch '$BASE/.pm2/own-node'"
+  run env PATH="$FORUM_PATH" "$NODE_DIR/bin/pm2" startup systemd -u "$RUN_USER" --hp "$BASE"
 }
 
 # ---------------------------------------------------------------- 8. nginx + TLS
@@ -437,8 +494,8 @@ verify() {
   say "Checking that everything answers"
   [[ $DRY_RUN -eq 1 ]] && { info "(skipped in dry run)"; return; }
   sleep 8
-  curl -fsS -o /dev/null "http://127.0.0.1:$NODEBB_PORT/" && info "NodeBB answers on 127.0.0.1:$NODEBB_PORT" || info "NodeBB is not answering yet: sudo -u $RUN_USER -H pm2 logs nodebb"
-  curl -fsS "http://127.0.0.1:$BRIDGE_PORT/healthz" && echo || info "bridge is not answering yet: sudo -u $RUN_USER -H pm2 logs cr-bridge"
+  curl -fsS -o /dev/null "http://127.0.0.1:$NODEBB_PORT/" && info "NodeBB answers on 127.0.0.1:$NODEBB_PORT" || info "NodeBB is not answering yet: sudo forum-pm2 logs nodebb"
+  curl -fsS "http://127.0.0.1:$BRIDGE_PORT/healthz" && echo || info "bridge is not answering yet: sudo forum-pm2 logs cr-bridge"
 }
 
 summary() {
@@ -447,7 +504,7 @@ summary() {
     Forum:            $SCHEME://$DOMAIN   (admin user: admin, password in $FORUM_ENV)
     Forum process:    127.0.0.1:$NODEBB_PORT   Bridge: 127.0.0.1:$BRIDGE_PORT
     Secrets:          $FORUM_ENV, $BRIDGE_ENV
-    Logs:             sudo -u $RUN_USER -H pm2 logs nodebb    |    sudo -u $RUN_USER -H pm2 logs cr-bridge
+    Logs:             sudo forum-pm2 logs nodebb    |    sudo forum-pm2 logs cr-bridge
 
     Next (INSTALL.md, Part C):
       C1. Discord login: CR_DISCORD_CLIENT_ID / CR_DISCORD_CLIENT_SECRET in $FORUM_ENV,
@@ -462,6 +519,7 @@ main() {
   preflight
   install_packages
   prepare_user_and_secrets
+  install_node
   install_database
   install_nodebb
   install_bridge

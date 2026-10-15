@@ -2,6 +2,7 @@
 
 // Closet Republic plugin for NodeBB 4.
 //
+// 0. The Closet Republic look (theme.js): dark prism skin, nature mode, logo, favicon, emails.
 // 1. "Log in with Discord". New members get a random pseudonym (citizen-xxxxxx) instead of
 //    their Discord name, so the forum never reveals who someone is on Discord. They can
 //    rename themselves afterwards. The Discord link is stored privately (discordId:uid).
@@ -28,12 +29,20 @@ const db = require.main.require('./src/database');
 const user = require.main.require('./src/user');
 const authenticationController = require.main.require('./src/controllers/authentication');
 
+const theme = require('./theme');
+
 const NAME = 'discord';
 // Only changed for testing against a mock (see docs/testing.md).
 const DISCORD = (process.env.CR_DISCORD_BASE || 'https://discord.com').replace(/\/$/, '');
 const env = (key, fallback = '') => process.env[key] || fallback;
 
 const Plugin = module.exports;
+
+// ---------------------------------------------------------------- look
+
+Plugin.init = async params => theme.init(params);
+Plugin.addConfig = theme.addConfig;
+Plugin.addLinkTags = theme.addLinkTags;
 
 // ---------------------------------------------------------------- Discord login
 

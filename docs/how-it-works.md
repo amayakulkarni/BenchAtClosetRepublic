@@ -80,7 +80,7 @@ NodeBB 4 ships with ActivityPub **switched on**. Because many members once had t
 ### 1.4 Maintaining it
 
 - **Updates**: NodeBB is pinned to a tag. To upgrade, re-run the setup script with `--nodebb-version vX.Y.Z` on the test machine first, then production. The script fetches the tag, reinstalls, rebuilds and reloads.
-- **Monitoring**: `curl -s 127.0.0.1:40007/healthz` reports Reddit mode, Discord connection, last ingest and last reconcile times. `sudo -u nodebb -H pm2 logs` shows both processes.
+- **Monitoring**: `curl -s 127.0.0.1:40007/healthz` reports Reddit mode, Discord connection, last ingest and last reconcile times. `sudo forum-pm2 logs` shows both processes.
 - **Moderation**: NodeBB's post queue holds new members' first posts until a moderator approves them (on by default). Keep it on. Topics go to Reddit only after approval, because the plugin reports a topic when it is actually posted.
 
 ---

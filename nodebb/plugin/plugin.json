@@ -1,10 +1,13 @@
 {
 	"id": "nodebb-plugin-closet-republic",
 	"name": "Closet Republic",
-	"description": "Discord login with pseudonymous usernames, and forum events for the Closet Republic bridge (Reddit sync, role tiers)",
+	"description": "Closet Republic: the site's dark prism look, Discord login with pseudonymous usernames, and forum events for the bridge (Reddit sync, role tiers)",
 	"url": "https://github.com/amayakulkarni/ClosetRepublic",
 	"library": "./library.js",
 	"hooks": [
+		{ "hook": "static:app.load", "method": "init" },
+		{ "hook": "filter:config.get", "method": "addConfig" },
+		{ "hook": "filter:meta.getLinkTags", "method": "addLinkTags" },
 		{ "hook": "filter:auth.init", "method": "loadStrategies" },
 		{ "hook": "filter:auth.list", "method": "listAssociations" },
 		{ "hook": "static:user.delete", "method": "deleteUserData" },
@@ -17,5 +20,15 @@
 		{ "hook": "action:post.edit", "method": "onPostEdit" },
 		{ "hook": "action:post.delete", "method": "onPostDelete" },
 		{ "hook": "action:post.restore", "method": "onPostRestore" }
-	]
+	],
+	"scss": [
+		"scss/closet-republic.scss"
+	],
+	"scripts": [
+		"public/closet-republic.js"
+	],
+	"staticDirs": {
+		"brand": "static/brand"
+	},
+	"templates": "templates"
 }
