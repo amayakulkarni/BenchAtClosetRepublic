@@ -64,12 +64,14 @@ export async function ensureGroups() {
         disableLeave: 1,
       });
       if (created?.slug) slug = created.slug;
-      // NodeBB makes whoever creates a group its owner and first member; the bridge account
-      // should not wear every badge.
-      await nodebb.leaveGroup(slug, config.nodebb.bridgeUid).catch(() => {});
       audit('group.created', { tier: t.key, slug });
     }
     kv.set(`group-slug:${t.key}`, slug);
+    // NodeBB makes whoever creates a group its owner and first member; the bridge account
+    // should not wear every badge. Tier groups refuse leaving, so allow it for a moment
+    // (this also cleans up forums set up before this fix).
+    await nodebb.updateGroup(slug, { disableLeave: false });
+    await nodebb.leaveGroup(slug, config.nodebb.bridgeUid).catch(() => {}); // not a member: fine
     await nodebb.updateGroup(slug, {
       userTitle: t.userTitle || t.name,
       userTitleEnabled: true,
@@ -109,12 +111,13 @@ export async function computeTier(uid) {
   return { tier, source };
 }
 
-export async function applyTier(uid, reason) {
+// force: apply even when the stored tier is unchanged (reconcile repairs badges removed by hand).
+export async function applyTier(uid, reason, force = false) {
   if (!uid || uid === config.nodebb.bridgeUid) return null;
   const { tier, source } = await computeTier(uid);
   const key = tier ? tier.key : 'none';
   const current = db.prepare('SELECT tier FROM tiers WHERE uid = ?').get(uid)?.tier;
-  if (current === key) return tier;
+  if (current === key && !force) return tier;
 
   if (tier) await nodebb.joinGroup(groupSlug(tier), uid);
   for (const other of tiers) {
@@ -122,6 +125,7 @@ export async function applyTier(uid, reason) {
     await nodebb.leaveGroup(groupSlug(other), uid).catch(() => {}); // not a member: fine
   }
   await nodebb.setGroupTitle(uid, tier ? tier.name : null);
+  if (current === key) return tier;
   if (!config.dryRun) {
     db.prepare(`INSERT INTO tiers (uid, tier, source, updated_at) VALUES (?, ?, ?, ?)
                 ON CONFLICT(uid) DO UPDATE SET tier = excluded.tier, source = excluded.source, updated_at = excluded.updated_at`)
@@ -135,7 +139,7 @@ export async function applyAll(reason = 'reconcile') {
   const uids = new Set([...link.all(), ...db.prepare('SELECT uid FROM tiers').all().map((r) => r.uid)]);
   for (const uid of uids) {
     try {
-      await applyTier(uid, reason);
+      await applyTier(uid, reason, true);
     } catch (err) {
       console.error(`[bridge] tier for uid ${uid} failed:`, err.message);
     }

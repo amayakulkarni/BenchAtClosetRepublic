@@ -7,21 +7,34 @@ import { config } from './config.js';
 let client = null;
 let guild = null;
 let onChange = async () => {};
+let onReady = async () => {};
 
 export const discordEnabled = () => Boolean(config.discord.token && config.discord.guildId);
 export const discordReady = () => Boolean(guild);
+let problem = null;
+export const discordProblem = () => problem;
 
-export async function startDiscord(handler) {
+// handler(discordId) runs on every role change; ready() runs each time the bot connects, so
+// tiers are checked again for everyone (covers logins and role changes while it was offline).
+export async function startDiscord(handler, ready = async () => {}) {
   if (!discordEnabled()) {
     console.log('[bridge] Discord off (DISCORD_BOT_TOKEN / DISCORD_GUILD_ID not set)');
     return;
   }
   onChange = handler;
+  onReady = ready;
   client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers] });
 
   client.once(Events.ClientReady, async () => {
-    guild = await client.guilds.fetch(config.discord.guildId);
+    try {
+      guild = await client.guilds.fetch(config.discord.guildId);
+    } catch (err) {
+      problem = `bot cannot see server ${config.discord.guildId}`;
+      console.error(`[bridge] Discord: the bot cannot see server ${config.discord.guildId} (${err.message}). Invite the bot to the server and check DISCORD_GUILD_ID.`);
+      return;
+    }
     console.log(`[bridge] Discord connected to ${guild.name}`);
+    onReady().catch((err) => console.error('[bridge] tier check after connecting failed', err.message));
   });
   const changed = (member) => onChange(member.id).catch((err) => console.error('[bridge] role sync failed', err.message));
   client.on(Events.GuildMemberUpdate, (before, after) => {
@@ -31,7 +44,17 @@ export async function startDiscord(handler) {
   });
   client.on(Events.GuildMemberAdd, changed);
   client.on(Events.GuildMemberRemove, changed);
-  await client.login(config.discord.token);
+  try {
+    await client.login(config.discord.token);
+  } catch (err) {
+    // Keep the bridge running (Reddit, Buy Me a Coffee) when the bot cannot log in.
+    const hint = /disallowed intents/i.test(err.message)
+      ? 'switch on "Server Members Intent" (Discord Developer Portal > the app > Bot), then restart the bridge'
+      : 'check DISCORD_BOT_TOKEN in bridge.env, then restart the bridge';
+    problem = `login failed: ${hint}`;
+    console.error(`[bridge] Discord login failed (${err.message}): ${hint}`);
+    client = null;
+  }
 }
 
 // Role ids of a Discord user in the server; [] = not a member; throws when Discord is

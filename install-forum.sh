@@ -342,10 +342,13 @@ configure_pm2() {
 //   sudo forum-pm2 startOrReload $BASE/ecosystem.forum.config.cjs --update-env
 // (re-reads $FORUM_ENV; the bridge reads $BRIDGE_ENV on every start)
 const fs = require('fs');
+// KEY=value lines; spaces, Windows line endings and quotes around the value are ignored.
 const readEnv = (file) => Object.fromEntries(
-  fs.readFileSync(file, 'utf8').split('\n')
-    .filter((l) => /^[A-Z0-9_]+=/.test(l))
-    .map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]),
+  fs.readFileSync(file, 'utf8').split(/\r?\n/)
+    .map((l) => l.trim().replace(/^export\s+/, ''))
+    .filter((l) => /^[A-Z0-9_]+\s*=/.test(l))
+    .map((l) => [l.slice(0, l.indexOf('=')).trim(), l.slice(l.indexOf('=') + 1).trim().replace(/^(['"])(.*)\1$/, '\$2')])
+    .filter(([, v]) => v !== ''),
 );
 const forum = readEnv('$FORUM_ENV');
 module.exports = {

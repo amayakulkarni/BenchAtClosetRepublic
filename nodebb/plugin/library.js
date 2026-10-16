@@ -34,7 +34,7 @@ const theme = require('./theme');
 const NAME = 'discord';
 // Only changed for testing against a mock (see docs/testing.md).
 const DISCORD = (process.env.CR_DISCORD_BASE || 'https://discord.com').replace(/\/$/, '');
-const env = (key, fallback = '') => process.env[key] || fallback;
+const env = (key, fallback = '') => (process.env[key] || '').trim() || fallback;
 
 const Plugin = module.exports;
 

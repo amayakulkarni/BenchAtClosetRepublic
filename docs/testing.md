@@ -132,7 +132,7 @@ Remove `CR_DISCORD_BASE` (and the fake values) before testing with the real Disc
 
 When the fakes pass:
 
-1. **Discord**: create a test server and an application at discord.com/developers. OAuth2 redirect: `http://localhost/auth/discord/callback` (option B: `https://staging-forum.closetrepublic.com/auth/discord/callback`). Put the client id and secret in `forum.env`. Add a bot, switch on **Server Members Intent**, invite it to the test server (it needs no permissions), and put `DISCORD_BOT_TOKEN` and `DISCORD_GUILD_ID` in `bridge.env`. Copy the five tier role ids into `config/roles.json`. Give a test account a tier role and check that the forum badge changes within seconds; remove the role and check that it goes.
+1. **Discord**: create a test server and an application at discord.com/developers. OAuth2 redirect: `http://localhost/auth/discord/callback` (option B: `https://stage.closetrepublic.com/auth/discord/callback`). Put the client id and secret in `forum.env`. Add a bot, switch on **Server Members Intent**, invite it to the test server (it needs no permissions), and put `DISCORD_BOT_TOKEN` and `DISCORD_GUILD_ID` in `bridge.env`. Copy the five tier role ids into `config/roles.json`. Give a test account a tier role and check that the forum badge changes within seconds; remove the role and check that it goes.
 2. **Reddit**: follow [reddit-sync.md](reddit-sync.md) with a private test subreddit such as r/closetrepublic_test (`REDDIT_SUBREDDIT=closetrepublic_test`).
 
 ## 7. Privacy checks before going live

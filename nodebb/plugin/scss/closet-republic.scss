@@ -287,7 +287,8 @@ html[data-nature='on'] .skin-closet-republic {
 	transition: transform 0.2s;
 }
 .cr-nature-toggle[aria-checked='true'] .cr-nature-toggle__track {
-	background: linear-gradient(90deg, var(--cr-spectrum));
+	// Same as the main site's --toggle-spectrum.
+	background: linear-gradient(90deg, #ff978f, #ffb47f, #ffe680, #94e3b0, #8cc2ff, #aa9fff, #e09fff);
 }
 .cr-nature-toggle[aria-checked='true'] .cr-nature-toggle__thumb {
 	transform: translateX(20px);

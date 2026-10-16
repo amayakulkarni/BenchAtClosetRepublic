@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
 import http from 'node:http';
 import { config } from './config.js';
 import { kv } from './db.js';
-import { discordEnabled, discordReady } from './discord.js';
+import { discordEnabled, discordReady, discordProblem } from './discord.js';
 
 const sign = (secret, raw) => crypto.createHmac('sha256', secret).update(raw).digest('hex');
 export function validSignature(secret, raw, given) {
@@ -51,7 +51,7 @@ export function startServer({ onForumEvent, onBmcEvent, jobs }) {
           ok: true,
           dryRun: config.dryRun,
           reddit: config.reddit.mode,
-          discord: discordEnabled() ? (discordReady() ? 'connected' : 'connecting') : 'off',
+          discord: discordEnabled() ? (discordReady() ? 'connected' : discordProblem() || 'connecting') : 'off',
           lastIngest: kv.get('last-ingest'),
           lastReconcile: kv.get('last-reconcile'),
         });

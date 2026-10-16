@@ -101,7 +101,7 @@ await waitForForum();
 await startDiscord(async (discordId) => {
   const uid = link.byDiscord(discordId);
   if (uid) await run('discord role change', () => applyTier(uid, 'discord role change'));
-});
+}, () => run('roles', () => applyAll('discord connected')));
 
 const every = (seconds, job) => setInterval(job, seconds * 1000);
 every(config.sync.pollSeconds ?? 120, jobs.ingest);
