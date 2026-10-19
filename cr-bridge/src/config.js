@@ -25,7 +25,7 @@ export const config = {
   },
 
   reddit: {
-    mode: env('REDDIT_MODE', 'off'), // api | rss | off
+    mode: env('REDDIT_MODE', 'off'), // devvit | api | rss | off
     subreddit: env('REDDIT_SUBREDDIT', 'closetrepublic'),
     clientId: env('REDDIT_CLIENT_ID'),
     clientSecret: env('REDDIT_CLIENT_SECRET'),
@@ -36,6 +36,9 @@ export const config = {
     authBase: env('REDDIT_AUTH_BASE', 'https://www.reddit.com').replace(/\/$/, ''),
     rssBase: env('REDDIT_RSS_BASE', 'https://www.reddit.com').replace(/\/$/, ''),
     maxPerMinute: Number(env('REDDIT_MAX_QPM', '60')),
+    // devvit mode: the closetrepublic-sync app in the subreddit (reddit-app/ in this package).
+    devvitUrl: env('DEVVIT_URL').replace(/\/+$/, ''),
+    devvitToken: env('DEVVIT_TOKEN'),
   },
 
   discord: {
@@ -64,6 +67,10 @@ export function checkConfig() {
   if (config.reddit.mode === 'api' && !(config.reddit.clientId && config.reddit.clientSecret && config.reddit.username && config.reddit.password)) {
     problems.push('REDDIT_MODE=api needs REDDIT_CLIENT_ID, REDDIT_CLIENT_SECRET, REDDIT_USERNAME, REDDIT_PASSWORD');
   }
+  if (config.reddit.mode === 'devvit' && !(config.reddit.devvitUrl && config.reddit.devvitToken)) {
+    problems.push('REDDIT_MODE=devvit needs DEVVIT_URL and DEVVIT_TOKEN (see docs/reddit-devvit.md)');
+  }
+  if (!['devvit', 'api', 'rss', 'off'].includes(config.reddit.mode)) problems.push(`REDDIT_MODE=${config.reddit.mode}: use devvit, api, rss or off`);
   if (config.reddit.mode !== 'off' && config.sync.ingest?.enabled && !config.sync.ingest.defaultCid) {
     problems.push('config/sync.json: set ingest.defaultCid to the forum category for Reddit copies');
   }

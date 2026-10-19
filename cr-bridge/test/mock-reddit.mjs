@@ -4,6 +4,8 @@
 //   REDDIT_MODE=api REDDIT_API_BASE=http://127.0.0.1:40017 REDDIT_AUTH_BASE=http://127.0.0.1:40017
 //   REDDIT_RSS_BASE=http://127.0.0.1:40017 REDDIT_CLIENT_ID=x REDDIT_CLIENT_SECRET=x
 //   REDDIT_USERNAME=closetrepublic_bot REDDIT_PASSWORD=x
+// Or as the closetrepublic-sync Devvit app (reddit-app/), same data:
+//   REDDIT_MODE=devvit DEVVIT_URL=http://127.0.0.1:40017/external DEVVIT_TOKEN=devvit_at_test
 // Control it with:
 //   curl -XPOST localhost:40017/_mock/post -d '{"title":"Hello","selftext":"Body","author":"someone","ageMinutes":30}'
 //   curl -XPOST localhost:40017/_mock/remove/t3_abc1     (simulate a moderator removal)
@@ -36,6 +38,8 @@ function addComment({ postId, body, author = 'someone', parent = null }) {
   return c;
 }
 
+const APP = 'closetrepublic-sync';
+const DEVVIT_TOKEN = process.env.MOCK_DEVVIT_TOKEN || 'devvit_at_test';
 const listing = (children) => ({ kind: 'Listing', data: { children } });
 
 const server = http.createServer(async (req, res) => {
@@ -45,6 +49,32 @@ const server = http.createServer(async (req, res) => {
   const json = (status, body) => { res.writeHead(status, { 'content-type': 'application/json', 'x-ratelimit-remaining': '99', 'x-ratelimit-reset': '60' }); res.end(JSON.stringify(body)); };
   const form = new URLSearchParams(raw);
   const p = url.pathname;
+
+  // ---- Devvit app endpoints (reddit-app/src/server/index.ts), same JSON shapes
+  if (p.startsWith('/external/')) {
+    if (req.headers.authorization !== `bearer ${DEVVIT_TOKEN}`) return json(401, { error: 'unauthorized' });
+    const b = raw ? JSON.parse(raw) : {};
+    const own = (t) => t.author === APP;
+    if (p === '/external/new-posts') {
+      const posts = [...things.values()].filter((t) => t.name.startsWith('t3_') && !own(t)).sort((a, z) => z.created_utc - a.created_utc);
+      return json(200, { posts: posts.slice(0, b.limit || 50) });
+    }
+    if (p === '/external/info') return json(200, { things: (b.ids || []).filter((i) => things.has(i)).map((i) => things.get(i)) });
+    if (p === '/external/comments') {
+      return json(200, { comments: [...things.values()].filter((t) => t.link_id === b.postId && !own(t)).sort((a, z) => a.created_utc - z.created_utc) });
+    }
+    if (p === '/external/submit-link') {
+      const post = addPost({ title: b.title, author: APP, url: b.url, ageMinutes: 0 });
+      return json(200, { name: post.name, permalink: post.permalink });
+    }
+    if (p === '/external/remove') {
+      const t = things.get(b.id);
+      if (!t || !own(t)) return json(403, { error: 'not a post made by this app' });
+      t.removed_by_category = 'deleted'; t.author = '[deleted]';
+      return json(200, { removed: b.id });
+    }
+    return json(404, { error: 'no such endpoint' });
+  }
 
   if (p === '/api/v1/access_token') return json(200, { access_token: 'mock-token', expires_in: 3600 });
   if (p.match(/^\/r\/\w+\/new\/?$/)) {

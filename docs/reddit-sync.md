@@ -38,6 +38,7 @@ REDDIT_MAX_QPM=60
 
 | Mode | Needs | Does |
 |---|---|---|
+| `devvit` | the closetrepublic-sync Devvit app installed in the subreddit ([reddit-devvit.md](reddit-devvit.md)) | everything, like `api`, with no Reddit API key |
 | `api` | approved app + bot account | everything: ingest, publish, removals, edits, comments |
 | `rss` | nothing | ingest new posts from the public feed only. No flair routing, no removal checks, no publishing |
 | `off` | | nothing (the forum carries on as normal) |

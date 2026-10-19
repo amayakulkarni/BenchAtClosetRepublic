@@ -1,8 +1,11 @@
-// Reddit access. Two modes:
+// Reddit access. Three modes:
+//  devvit: the closetrepublic-sync Devvit app installed in the subreddit (reddit-app/).
+//       Same abilities as api, with no Reddit API key: the bridge calls the app's
+//       external endpoints with an app token (DEVVIT_URL, DEVVIT_TOKEN).
 //  api: OAuth "script" app logged in as the bot account (u/closetrepublic or similar).
 //       Can read, crosspost forum topics, delete its own posts and check removals.
 //  rss: no credentials at all. Read-only, new posts only, no removal checks beyond
-//       "the post vanished from the feed". Useful until Reddit approves API access.
+//       "the post vanished from the feed". Useful until one of the above is set up.
 import { config } from './config.js';
 import { RateLimiter } from './ratelimit.js';
 
@@ -65,18 +68,54 @@ async function call(method, path, params = {}) {
 
 const sub = () => config.reddit.subreddit;
 
+// Modes that can share, delete and check removals (rss can only read new posts).
+export const fullAccess = () => ['api', 'devvit'].includes(config.reddit.mode);
+
+// ---------------------------------------------------------------- devvit
+
+async function devvit(path, payload = {}) {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await limiter.take();
+    const res = await fetch(`${config.reddit.devvitUrl}/${path}`, {
+      method: 'POST',
+      headers: { authorization: `bearer ${config.reddit.devvitToken}`, 'content-type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(45_000),
+    });
+    if (res.status === 429 || res.status >= 500) {
+      limiter.backoff(attempt, Number(res.headers.get('retry-after')));
+      continue;
+    }
+    const json = await res.json().catch(() => null);
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(`Devvit app refused the request (${res.status}${json?.error ? `: ${json.error}` : ''}): check DEVVIT_TOKEN and DEVVIT_URL`);
+    }
+    if (!res.ok) throw new Error(`Devvit app ${path} returned ${res.status}${json?.error ? `: ${json.error}` : ''}`);
+    return json;
+  }
+  throw new Error(`Devvit app ${path}: gave up after retries`);
+}
+
+const viaDevvit = () => config.reddit.mode === 'devvit';
+
 export const reddit = {
   // Newest submissions, newest first, as Reddit "link" objects (t3).
   async newPosts(limit = 50) {
     if (config.reddit.mode === 'rss') return rssNewPosts();
+    if (viaDevvit()) return (await devvit('new-posts', { limit })).posts;
     const json = await call('GET', `/r/${sub()}/new`, { limit });
     return json.data.children.map((c) => c.data);
   },
 
   // Current state of up to 100 things (posts or comments) by fullname.
   async info(fullnames) {
-    if (config.reddit.mode !== 'api' || !fullnames.length) return [];
+    if (!fullAccess() || !fullnames.length) return [];
     const out = [];
+    if (viaDevvit()) {
+      // Smaller batches: the app looks each one up and must answer within Devvit's time limit.
+      for (let i = 0; i < fullnames.length; i += 25) out.push(...(await devvit('info', { ids: fullnames.slice(i, i + 25) })).things);
+      return out;
+    }
     for (let i = 0; i < fullnames.length; i += 100) {
       const json = await call('GET', '/api/info', { id: fullnames.slice(i, i + 100).join(',') });
       out.push(...json.data.children.map((c) => c.data));
@@ -86,7 +125,8 @@ export const reddit = {
 
   // Flat list of a post's comments (t1), oldest first.
   async comments(postId36) {
-    if (config.reddit.mode !== 'api') return [];
+    if (!fullAccess()) return [];
+    if (viaDevvit()) return (await devvit('comments', { postId: `t3_${postId36}` })).comments;
     const json = await call('GET', `/r/${sub()}/comments/${postId36}`, { limit: 200, sort: 'old' });
     const flat = [];
     const walk = (listing) => {
@@ -101,6 +141,7 @@ export const reddit = {
   },
 
   async submitLink({ title, url, flairId }) {
+    if (viaDevvit()) return (await devvit('submit-link', { title: title.slice(0, 300), url, flairId: flairId || undefined })).name;
     const params = { sr: sub(), kind: 'link', title: title.slice(0, 300), url, resubmit: 'true', sendreplies: 'false' };
     if (flairId) params.flair_id = flairId;
     const json = await call('POST', '/api/submit', params);
@@ -108,6 +149,7 @@ export const reddit = {
   },
 
   async remove(fullname) {
+    if (viaDevvit()) return void (await devvit('remove', { id: fullname }));
     await call('POST', '/api/del', { id: fullname });
   },
 };

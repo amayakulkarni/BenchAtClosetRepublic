@@ -148,6 +148,7 @@ Two Reddit-side limits matter as much as the API cap: new bot accounts get caugh
 
 | Source | Mode | What it can do |
 |---|---|---|
+| Devvit app closetrepublic-sync ([reddit-devvit.md](reddit-devvit.md)) | `REDDIT_MODE=devvit` | everything above, with no Reddit API key: the bridge calls the app's external endpoints with an app token |
 | Reddit API | `REDDIT_MODE=api` | everything above |
 | Reddit RSS (`/r/closetrepublic/new/.rss`) | `REDDIT_MODE=rss` | ingest new posts only, read-only, no flair routing, no removal checks |
 | Fediverse (Lemmy, Mastodon, PieFed) | NodeBB built in | category synchronization, no bridge needed |

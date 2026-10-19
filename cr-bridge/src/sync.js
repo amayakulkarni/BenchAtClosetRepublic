@@ -11,7 +11,7 @@ import crypto from 'node:crypto';
 import { config } from './config.js';
 import { syncMap, audit, now, db } from './db.js';
 import { nodebb } from './nodebb.js';
-import { reddit, removalReason } from './reddit.js';
+import { reddit, removalReason, fullAccess } from './reddit.js';
 
 const S = () => config.sync;
 const hash = (s) => crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
@@ -63,7 +63,7 @@ export async function ingest() {
     audit('ingest.post', { reddit: p.name, tid: res.tid, cid });
     created++;
   }
-  if (opts.mirrorComments && config.reddit.mode === 'api') created += await ingestComments();
+  if (opts.mirrorComments && fullAccess()) created += await ingestComments();
   return { seen: posts.length, created };
 }
 
@@ -89,7 +89,7 @@ async function ingestComments() {
 
 export async function publishTopic(tid) {
   const opts = S().publish;
-  if (!opts.enabled || config.reddit.mode !== 'api') return { skipped: 'publish off' };
+  if (!opts.enabled || !fullAccess()) return { skipped: 'publish off' };
   if (syncMap.byTid(tid)) return { skipped: 'already synced' };
   const topic = await nodebb.getTopic(tid);
   const tags = (topic.tags || []).map((t) => (typeof t === 'string' ? t : t.value));
@@ -155,7 +155,7 @@ export async function reconcile() {
   const rows = syncMap.recent((S().reconcile?.windowDays ?? 14) * 86400);
   const result = { checked: rows.length, hidden: 0, restored: 0, edited: 0, removedOnReddit: 0 };
 
-  if (config.reddit.mode === 'api' && rows.length) {
+  if (fullAccess() && rows.length) {
     const things = Object.fromEntries((await reddit.info(rows.map((r) => r.reddit_id))).map((t) => [t.name, t]));
     for (const row of rows) {
       const thing = things[row.reddit_id];

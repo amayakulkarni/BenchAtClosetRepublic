@@ -1,0 +1,23 @@
+{
+  "name": "closetrepublic-sync",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Devvit app for r/closetrepublic: lets the Closet Republic forum bridge read the subreddit and share forum topics, without a Reddit API key",
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/server/index.ts --bundle --platform=node --format=cjs --target=node22 --outfile=dist/server/index.js",
+    "check": "tsc --noEmit",
+    "login": "devvit login",
+    "dev": "npm run build && devvit playtest",
+    "deploy": "npm run build && devvit upload"
+  },
+  "dependencies": {
+    "@devvit/web": "0.14.8",
+    "hono": "4.13.13"
+  },
+  "devDependencies": {
+    "devvit": "0.14.8",
+    "esbuild": "0.25.10",
+    "typescript": "5.9.3"
+  }
+}
